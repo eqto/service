@@ -15,12 +15,13 @@ import (
 )
 
 var (
-	args    = make(map[string]string)
+	args    map[string]string
 	stopFn  func() error
 	panicFn func(args ...interface{})
 )
 
 func Get(name string) string {
+	parseArgs()
 	if arg, ok := args[name]; ok {
 		return arg
 	}
@@ -28,6 +29,7 @@ func Get(name string) string {
 }
 
 func GetInt(name string) int {
+	parseArgs()
 	if arg, ok := args[name]; ok {
 		i, e := strconv.Atoi(arg)
 		if e != nil {
@@ -61,6 +63,23 @@ func Filename() string {
 	return file
 }
 
+func parseArgs() {
+	if args != nil {
+		return
+	}
+	args = make(map[string]string)
+	for i, arg := range os.Args {
+		if i > 1 {
+			if strings.HasPrefix(arg, `--`) {
+				split := strings.SplitN(arg, `=`, 2)
+				if len(split) == 2 {
+					args[strings.TrimSpace(split[0][2:])] = strings.TrimSpace(split[1])
+				}
+			}
+		}
+	}
+}
+
 func Run(fn func() error) error {
 	filename := Filename()
 
@@ -75,16 +94,7 @@ func Run(fn func() error) error {
 	case `stop`:
 		return stop(filename)
 	case `run`:
-		for i, arg := range os.Args {
-			if i > 1 {
-				if strings.HasPrefix(arg, `--`) {
-					split := strings.SplitN(arg, `=`, 2)
-					if len(split) == 2 {
-						args[strings.TrimSpace(split[0][2:])] = strings.TrimSpace(split[1])
-					}
-				}
-			}
-		}
+		parseArgs()
 		go fn()
 		exitSignal := make(chan os.Signal, 1)
 		signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGQUIT)
