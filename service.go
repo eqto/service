@@ -95,8 +95,13 @@ func Run(fn func() error) error {
 		return stop(filename)
 	case `run`:
 		parseArgs()
-		go fn()
 		exitSignal := make(chan os.Signal, 1)
+		go func() {
+			if e := fn(); e != nil {
+				println(e.Error())
+			}
+			exitSignal <- nil
+		}()
 		signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGQUIT)
 		<-exitSignal
 		if stopFn != nil {
