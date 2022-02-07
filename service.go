@@ -43,9 +43,9 @@ func GetInt(name string) int {
 func HandlePanic() {
 	if r := recover(); r != nil {
 		if panicFn != nil {
-			panicFn(recover())
+			panicFn(r)
 		} else {
-			log.Println(recover())
+			log.Println(r)
 		}
 	}
 }
