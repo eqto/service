@@ -116,6 +116,12 @@ func Run(fn func() error) error {
 	return nil
 }
 
+func Wait() { 
+	exitSignal := make(chan os.Signal, 1)
+	signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGQUIT)
+	<-exitSignal
+}
+
 func arg(idx int) (string, bool) {
 	if idx < len(os.Args)-1 {
 		return os.Args[idx+1], true
