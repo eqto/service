@@ -10,13 +10,14 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"log"
 )
 
 var (
 	args    map[string]string
-	stopFn  func() error
+	stopFn  func()
 	panicFn func(args ...interface{})
 )
 
@@ -54,7 +55,7 @@ func OnPanic(fn func(args ...interface{})) {
 	panicFn = fn
 }
 
-func OnStop(fn func() error) {
+func OnStop(fn func()) {
 	stopFn = fn
 }
 
@@ -95,20 +96,38 @@ func Run(fn func() error) error {
 		return stop(filename)
 	case `run`:
 		parseArgs()
+
 		exitSignal := make(chan os.Signal, 1)
+		doneSignal := make(chan struct{})
+		signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGQUIT)
+
 		go func() {
 			if e := fn(); e != nil {
 				println(e.Error())
 			}
-			exitSignal <- nil
+			doneSignal <- struct{}{}
 		}()
-		signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGQUIT)
-		<-exitSignal
-		if stopFn != nil {
-			if e := stopFn(); e != nil {
-				return e
+
+		select {
+		case <-exitSignal:
+			if stopFn != nil {
+				stopFn()
 			}
+			select {
+			case <-time.After(5 * time.Second):
+				println(`Application still running, send interrupt 3 times to force kill`)
+				<-exitSignal
+				<-exitSignal
+				<-exitSignal
+			case <-exitSignal:
+				println(`Application still running, send interrupt 2 times to force kill`)
+				<-exitSignal
+				<-exitSignal
+			case <-doneSignal:
+			}
+		case <-doneSignal:
 		}
+
 		return nil
 	default:
 		println(fmt.Sprintf(`Usage: %s [start/stop/run]`, filename))
@@ -116,7 +135,7 @@ func Run(fn func() error) error {
 	return nil
 }
 
-func Wait() { 
+func Wait() {
 	exitSignal := make(chan os.Signal, 1)
 	signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGQUIT)
 	<-exitSignal
