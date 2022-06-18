@@ -91,7 +91,7 @@ func Run(fn func() error) error {
 	}
 	switch cmd {
 	case `start`:
-		return start(filename, append([]string{`run`}, os.Args[1:]...)...)
+		return start(filename, append([]string{`run`}, os.Args[2:]...)...)
 	case `stop`:
 		return stop(filename)
 	case `run`:
