@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"log"
 )
@@ -98,34 +98,30 @@ func Run(fn func() error) error {
 		parseArgs()
 
 		exitSignal := make(chan os.Signal, 1)
-		doneSignal := make(chan struct{})
+		doneSignal := make(chan error)
+
 		signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGQUIT)
 
 		go func() {
-			if e := fn(); e != nil {
-				println(e.Error())
-			}
-			doneSignal <- struct{}{}
+			defer HandlePanic()
+			doneSignal <- fn()
 		}()
 
 		select {
 		case <-exitSignal:
 			if stopFn != nil {
-				stopFn()
+				go func() {
+					stopFn()
+					doneSignal <- nil
+				}()
+				select {
+				case <-exitSignal:
+					return errors.New(`force stop`)
+				case <-doneSignal:
+				}
 			}
-			select {
-			case <-time.After(5 * time.Second):
-				println(`Application still running, send interrupt 3 times to force kill`)
-				<-exitSignal
-				<-exitSignal
-				<-exitSignal
-			case <-exitSignal:
-				println(`Application still running, send interrupt 2 times to force kill`)
-				<-exitSignal
-				<-exitSignal
-			case <-doneSignal:
-			}
-		case <-doneSignal:
+		case e := <-doneSignal:
+			return e
 		}
 
 		return nil
